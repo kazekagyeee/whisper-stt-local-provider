@@ -36,21 +36,21 @@ COMPUTE_TYPE = os.getenv("WHISPER_COMPUTE_TYPE", "auto")  # auto, float16, int8,
 DEVICE = os.getenv("WHISPER_DEVICE", "auto")  # auto, cpu, cuda
 
 # ── Model loading ─────────────────────────────────────────────────────────────
-model = None
+whisper_model = None
 model_info = {}
 
 def load_model():
     """Lazy load the Whisper model."""
-    global model, model_info
+    global whisper_model, model_info
     if not FASTER_WHISPER_AVAILABLE:
         raise RuntimeError("faster-whisper is not installed. Run: pip install faster-whisper")
     
-    if model is None:
+    if whisper_model is None:
         logger.info(f"Loading faster-whisper model: {DEFAULT_MODEL}")
         logger.info(f"Device: {DEVICE}, Compute type: {COMPUTE_TYPE}")
         
         try:
-            model = WhisperModel(
+            whisper_model = WhisperModel(
                 DEFAULT_MODEL,
                 device=DEVICE,
                 compute_type=COMPUTE_TYPE,
@@ -96,7 +96,6 @@ class TranscriptionRequest(BaseModel):
 @app.post("/v1/audio/transcriptions")
 async def transcribe_audio(
     file: UploadFile = File(...),
-    model: str = "whisper-1",
     language: Optional[str] = DEFAULT_LANGUAGE,
     prompt: Optional[str] = None,
     temperature: float = 0.0,
@@ -106,7 +105,7 @@ async def transcribe_audio(
     OpenAI-compatible /v1/audio/transcriptions endpoint.
     Accepts audio file upload (wav, mp3, ogg, m4a, etc.)
     """
-    if not FASTER_WHISPER_AVAILABLE or model is None:
+    if not FASTER_WHISPER_AVAILABLE or whisper_model is None:
         try:
             load_model()
         except Exception as e:
@@ -128,7 +127,7 @@ async def transcribe_audio(
 
     try:
         # Transcribe
-        segments, info = model.transcribe(
+        segments, info = whisper_model.transcribe(
             tmp_path,
             language=language if language else None,
             initial_prompt=prompt,
@@ -184,7 +183,7 @@ async def transcribe_post(
     prompt: Optional[str] = None,
 ):
     """Custom /transcribe endpoint with simpler response."""
-    if not FASTER_WHISPER_AVAILABLE or model is None:
+    if not FASTER_WHISPER_AVAILABLE or whisper_model is None:
         try:
             load_model()
         except Exception as e:
@@ -201,7 +200,7 @@ async def transcribe_post(
         tmp_path = tmp.name
 
     try:
-        segments, info = model.transcribe(
+        segments, info = whisper_model.transcribe(
             tmp_path,
             language=language if language else None,
             initial_prompt=prompt,
@@ -259,14 +258,14 @@ async def available_models():
             "device": DEVICE,
             "compute_type": COMPUTE_TYPE,
         },
-        "status": "loaded" if model is not None else "not_loaded",
+        "status": "loaded" if whisper_model is not None else "not_loaded",
     }
 
 
 @app.get("/health")
 async def health():
     return {
-        "status": "ok" if model is not None else "model_not_loaded",
+        "status": "ok" if whisper_model is not None else "model_not_loaded",
         "model": model_info.get("model", DEFAULT_MODEL),
         "language": DEFAULT_LANGUAGE,
         "device": DEVICE,
