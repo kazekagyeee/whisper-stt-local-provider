@@ -14,7 +14,7 @@ from contextlib import asynccontextmanager
 from typing import Optional
 
 from fastapi import FastAPI, HTTPException, UploadFile, File
-from fastapi.responses import JSONResponse
+from fastapi.responses import Response, JSONResponse
 from pydantic import BaseModel
 
 try:
@@ -168,6 +168,61 @@ async def transcribe_audio(
         raise HTTPException(500, f"Transcription failed: {e}")
     finally:
         # Cleanup
+        try:
+            os.unlink(tmp_path)
+        except Exception:
+            pass
+
+
+@app.get("/v1/audio/transcriptions/text")
+async def transcribe_as_text_get(
+    language: Optional[str] = DEFAULT_LANGUAGE,
+):
+    """
+    GET endpoint that returns plain text transcript.
+    Useful for command-line curl | head pipelines.
+    """
+    raise HTTPException(400, "Use POST with file upload. GET requires audio file.")
+
+
+@app.post("/v1/audio/transcriptions/text")
+async def transcribe_as_text(
+    file: UploadFile = File(...),
+    language: Optional[str] = DEFAULT_LANGUAGE,
+    prompt: Optional[str] = None,
+):
+    """
+    Returns raw text (no JSON) — for command-line / easy parsing.
+    """
+    if not FASTER_WHISPER_AVAILABLE or whisper_model is None:
+        try:
+            load_model()
+        except Exception as e:
+            raise HTTPException(503, f"Model not available: {e}")
+
+    audio_data = await file.read()
+    if not audio_data:
+        raise HTTPException(400, "Empty audio file")
+
+    import tempfile
+
+    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+        tmp.write(audio_data)
+        tmp_path = tmp.name
+
+    try:
+        segments, info = whisper_model.transcribe(
+            tmp_path,
+            language=language if language else None,
+            initial_prompt=prompt,
+            vad_filter=True,
+        )
+        text = "".join([seg.text for seg in segments])
+        return Response(content=text.strip(), media_type="text/plain")
+    except Exception as e:
+        logger.error(f"Transcription failed: {e}")
+        raise HTTPException(500, f"Transcription failed: {e}")
+    finally:
         try:
             os.unlink(tmp_path)
         except Exception:
