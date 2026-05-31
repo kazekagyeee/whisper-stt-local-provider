@@ -1,0 +1,11 @@
+# faster-whisper: ctranslate2-based whisper, much faster than openai/whisper
+faster-whisper>=1.0.0
+# audio processing
+numpy>=1.24.0
+soundfile>=0.12.0
+# web server
+fastapi>=0.100.0
+uvicorn[standard]>=0.23.0
+pydantic>=2.0.0
+# file uploads
+python-multipart>=0.0.6

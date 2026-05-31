@@ -1,0 +1,31 @@
+services:
+  whisper-stt:
+    build: .
+    container_name: whisper-stt
+    ports:
+      - "${PORT:-8000}:8000"
+    environment:
+      - PORT=8000
+      - HOST=0.0.0.0
+      - WHISPER_MODEL=${WHISPER_MODEL:-base}
+      - WHISPER_LANGUAGE=${WHISPER_LANGUAGE:-ru}
+      - WHISPER_COMPUTE_TYPE=${WHISPER_COMPUTE_TYPE:-auto}
+      - WHISPER_DEVICE=${WHISPER_DEVICE:-auto}
+      - MODEL_CACHE_DIR=/root/.cache/whisper
+    volumes:
+      - ./models:/root/.cache/whisper
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    # GPU support (uncomment if you have NVIDIA GPU)
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
